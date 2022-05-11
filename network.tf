@@ -7,6 +7,8 @@ resource "aws_internet_gateway" "terraform-igw" {
     }
 }
 
+
+
 # Create Route table 
 resource "aws_route_table" "terraform-public-rt" {
     vpc_id = "${aws_vpc.terraform-vpc.id}"
