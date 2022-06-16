@@ -1,15 +1,15 @@
 
-# Create Internet Gateway
+######################### Create Internet Gateway ###########################################
 resource "aws_internet_gateway" "terraform-igw" {
     vpc_id = "${aws_vpc.terraform-vpc.id}"
     tags = {
         Name = "terraform-igw"
     }
 }
+#############################################################################################
 
 
-
-# Create Route table 
+################################# Create Route table######################################### 
 resource "aws_route_table" "terraform-public-rt" {
     vpc_id = "${aws_vpc.terraform-vpc.id}"
     
@@ -30,7 +30,9 @@ resource "aws_route_table_association" "terraform-rt-public-subnet-1"{
     route_table_id = "${aws_route_table.terraform-public-rt.id}"
 }
 
-# Create security group
+###############################################################################################
+
+#######################################Create security group####################################
 resource "aws_security_group" "ssh-allowed" {
     vpc_id = "${aws_vpc.terraform-vpc.id}"
     
@@ -61,14 +63,12 @@ resource "aws_security_group" "ssh-allowed" {
     }
 }
 
-# Create load balancer
+######################### Create load balancer######################################################
 resource "aws_lb" "terraform-alb" {
   name               = "terraform-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = ["${aws_security_group.ssh-allowed.id}"]
-#   security_groups    = [aws_security_group.lb_sg.id]
-#   subnets            = [for subnet in aws_subnet.public : subnet.id]
   subnets            = ["${aws_subnet.terraform-subnet-public-1a.id}","${aws_subnet.terraform-subnet-public-1b.id}"]
 
   enable_deletion_protection = false
@@ -83,8 +83,102 @@ resource "aws_lb" "terraform-alb" {
     Environment = "Terraform-Test"
   }
 }
+##################################################################################################
 
-# Create target group
+
+
+################################## Create listener#############################################
+resource "aws_lb_listener" "terraform-alb-listener" {
+   load_balancer_arn = aws_lb.terraform-alb.id
+     port              = "80"
+     protocol          = "HTTP"
+     #ssl_policy        = "ELBSecurityPolicy-2016-08"
+     #certificate_arn   = "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
+   default_action {
+     target_group_arn = aws_lb_target_group.terraform-tg.id
+     type             = "forward"
+   }
+ }
+
+
+
+############################ Create Launch Template############################################
+resource "aws_launch_template" "Terraform_Launch_Template" {
+  name = "Terraform_Launch_Template"
+  block_device_mappings {
+    device_name = "/dev/sda1"
+    ebs {
+      volume_size = 20
+    }
+  }
+  capacity_reservation_specification {
+    capacity_reservation_preference = "open"
+  }
+  cpu_options {
+    core_count       = 4
+    threads_per_core = 2
+  }
+  credit_specification {
+    cpu_credits = "standard"
+  }
+  disable_api_termination = true
+  ebs_optimized = true
+  elastic_gpu_specifications {
+    type = "test"
+  }
+  elastic_inference_accelerator {
+    type = "eia1.medium"
+  }
+  iam_instance_profile {
+    name = "ansible-role"
+  }
+  image_id = "${lookup(var.AMI, var.AWS_REGION)}"
+  instance_initiated_shutdown_behavior = "terminate"
+  instance_market_options {
+    market_type = "spot"
+  }
+  instance_type = "t2.micro" 
+  #kernel_id = "test"
+  key_name = "terraKey"
+  #license_specification {
+  #  license_configuration_arn = "arn:aws:license-manager:eu-east-1:123456789012:license-configuration:lic-0123456789abcdef0123456789abcdef"
+  #}
+  #metadata_options {
+  #  http_endpoint               = "enabled"
+  #  http_tokens                 = "required"
+  #  http_put_response_hop_limit = 1
+  #  instance_metadata_tags      = "enabled"
+  #}
+  monitoring {
+    enabled = true
+  }
+  network_interfaces {
+    associate_public_ip_address = true
+  }
+  placement {
+    availability_zone = "us-east-1a"
+  }
+  #ram_disk_id = "test"
+  # vpc_security_group_ids = ["${aws_security_group.ssh-allowed.id}"]
+  security_group_names = ["${aws_security_group.ssh-allowed.id}"]
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "test"
+    }
+  }
+#  user_data = <<EOF
+#  #!/bin/sh
+#  yum -y install httpd
+#  systemctl enable httpd
+#  systemctl start httpd.service
+#  echo "<h1>Hello World from $(hostname -f)</h1>" > /var/www/html/index.html
+  
+#  EOF
+}
+
+################### Create a target group #############################################
+
 resource "aws_lb_target_group" "terraform-tg" {
   name     = "terraform-tg"
   port     = 80
@@ -97,56 +191,86 @@ resource "aws_lb_target_group" "terraform-tg" {
   }
 }
 
-# Create listener
-# resource "aws_lb_listener" "terraform-alb-listener" {
-#   load_balancer_arn = aws_lb.terraform-alb.id
-
-#   default_action {
-#     target_group_arn = aws_lb_target_group.terraform-tg.id
-#     type             = "forward"
-#   }
+#########################################################################################
+# Create ASG to launch 2 EC's
+# resource "aws_placement_group" "test" {
+#   name     = "test"
+#   strategy = "cluster"
 # }
-# resource "aws_lb_listener" "terraform-alb-listener" {
-#   load_balancer_arn = aws_lb.terraform-alb.arn
-#   port              = "443"
-#   protocol          = "HTTPS"
-#   ssl_policy        = "ELBSecurityPolicy-2016-08"
-# #   certificate_arn   = "arn:aws:iam::187416307283:server-certificate/test_cert_rab3wuqwgja25ct3n4jdj2tzu4"
+# # try replacing this with a target group
+# resource "aws_autoscaling_group" "terraformASG" {
+#   name                      = "terraformASG"
+#   max_size                  = 3
+#   min_size                  = 1
+#   health_check_grace_period = 300
+#   health_check_type         = "EC2"
+#   desired_capacity          = 2
+#   force_delete              = true
+#   placement_group           = aws_placement_group.test.id
+#   #launch_configuration      = aws_launch_configuration.foobar.name
+#   launch_template           = aws_launch_template.Terraform_Launch_Template.id 
+#   vpc_zone_identifier       = "${aws_subnet.terraform-subnet-private-1a.id}"
+  
 
-#   default_action {
-#     type             = "forward"
-#     target_group_arn = aws_lb_target_group.terraform-tg.arn
-#   }
+#   initial_lifecycle_hook {
+#     name                 = "foobar"
+#     default_result       = "CONTINUE"
+#     heartbeat_timeout    = 2000
+#     lifecycle_transition = "autoscaling:EC2_INSTANCE_LAUNCHING"
+
+#     notification_metadata = <<EOF
+# {
+#   "foo": "bar"
 # }
+# EOF
 
-
-# Create autoscaling group for LB
-#Autoscaling Attachment
-# resource "aws_autoscaling_attachment" "svc_asg_external2" {
-#   alb_target_group_arn   = "${aws_alb_target_group.alb_target_group.arn}"
-#   alb_target_group_arn   = "${aws_alb_target_group.terraform-tg.arn}"
-#   autoscaling_group_name = "${aws_autoscaling_group.svc_asg.id}"
-# }
-
-# Alternatively could use an Instance Attachment for the ALB
-#Instance Attachment
-# resource "aws_alb_target_group_attachment" "svc_physical_external" {
-#   target_group_arn = "${aws_alb_target_group.alb_target_group.arn}"
-#   target_id        = "${aws_instance.svc.id}"  
-#   port             = 8080
-# }
-# # Network Load balancer for 2 IP's 
-# resource "aws_lb" "example" {
-#   name               = "example"
-#   load_balancer_type = "network"
-
-#   subnet_mapping {
-#     subnet_id            = aws_subnet.example1.id
-#     private_ipv4_address = "10.0.1.15"
+#     notification_target_arn = "arn:aws:sqs:us-east-1:444455556666:queue1*"
+#     role_arn                = "arn:aws:iam::123456789012:role/S3Access"
 #   }
 
-#   subnet_mapping {
-#     subnet_id            = aws_subnet.example2.id
-#     private_ipv4_address = "10.0.2.15"
+#   # tag {
+#   #   key                 = "foo"
+#   #   value               = "bar"
+#   #   propagate_at_launch = true
+#   # }
+
+#   timeouts {
+#     delete = "15m"
 #   }
+
+#   # tag {
+#   #   key                 = "lorem"
+#   #   value               = "ipsum"
+#   #   propagate_at_launch = false
+#   # }
 # }
+resource "aws_launch_template" "foobar" {
+  name_prefix   = "foobar"
+  image_id = "${lookup(var.AMI, var.AWS_REGION)}"
+  instance_type = "t2.micro"
+}
+
+resource "aws_autoscaling_group" "bar" {
+  availability_zones = ["us-east-1a"]
+  desired_capacity   = 2
+  max_size           = 3
+  min_size           = 1
+
+  launch_template {
+    id      = aws_launch_template.foobar.id
+    version = "$Latest"
+  }
+}
+
+
+#########################################################################################
+#Create EC2's in Target Group using launch template
+
+#########################################################################################
+
+
+########### Register EC2s with the target group##########################################
+
+##########################################################################################
+# Create a listener that forwards requests to the previously created target group.
+
