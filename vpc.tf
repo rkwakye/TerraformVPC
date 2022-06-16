@@ -37,10 +37,10 @@ Name = "terraform-subnet-public-1b"
 resource "aws_subnet" "terraform-subnet-private-1a" {
 vpc_id                  = aws_vpc.terraform-vpc.id
 cidr_block              = "10.0.3.0/24"
-# map_public_ip_on_launch = "true" #it makes this a public subnet
+map_public_ip_on_launch = "false" #it makes this a public subnet
 availability_zone       = "us-east-1a"
 tags = {
-Name = "terraform-subnet-public-1b"
+Name = "terraform-subnet-private-1a"
 }
 }
 
@@ -48,9 +48,9 @@ Name = "terraform-subnet-public-1b"
 resource "aws_subnet" "terraform-subnet-private-1b" {
 vpc_id                  = aws_vpc.terraform-vpc.id
 cidr_block              = "10.0.4.0/24"
-# map_public_ip_on_launch = "true" #it makes this a public subnet
+map_public_ip_on_launch = "false" #it makes this a public subnet
 availability_zone       = "us-east-1b"
 tags = {
-Name = "terraform-subnet-public-1b"
+Name = "terraform-subnet-private-1b"
 }
 }
